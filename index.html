@@ -118,6 +118,24 @@
         border-color: var(--accent);
       }
 
+      .refresh-button {
+        display: grid;
+        width: 36px;
+        height: 36px;
+        place-items: center;
+        padding: 0;
+      }
+
+      .refresh-button svg {
+        width: 18px;
+        height: 18px;
+        fill: none;
+        stroke: currentColor;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        stroke-width: 2;
+      }
+
       button:focus-visible,
       select:focus-visible,
       summary:focus-visible {
@@ -454,7 +472,18 @@
             <option value="SE3">SE3</option>
             <option value="SE4">SE4</option>
           </select>
-          <button id="refresh" type="button">Uppdatera data</button>
+          <button
+            id="refresh"
+            class="refresh-button"
+            type="button"
+            aria-label="Uppdatera data"
+            title="Uppdatera data"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M20 7v5h-5M4 17v-5h5"></path>
+              <path d="M5.64 5.64A9 9 0 0 1 20 12M4 12a9 9 0 0 0 14.36 6.36"></path>
+            </svg>
+          </button>
         </div>
       </header>
 
@@ -485,7 +514,7 @@
           <line id="chart-now" x1="68" y1="28" x2="68" y2="330"></line>
           <g id="chart-labels"></g>
         </svg>
-        <p class="price-chart-source">Data från elprisetjustnu.se</p>
+        <p class="price-chart-source">Data från elprisetjustnu.se (v. 0.91)</p>
       </section>
 
       <details id="api-response" class="panel json-details" hidden>
