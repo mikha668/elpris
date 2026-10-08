@@ -1,0 +1,614 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Elpriser · SE3</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: #f3f6fa;
+        color: #172438;
+        --page: #f3f6fa;
+        --surface: #fff;
+        --surface-muted: #f8fafc;
+        --border: #dce4ed;
+        --text: #172438;
+        --muted: #607187;
+        --accent: #087f70;
+        --accent-soft: #e2f5f1;
+        --hand: #087f70;
+        --dial: #a8b7c8;
+        --error: #b42318;
+        --price-cheap: #16803c;
+        --price-middle: #9a6900;
+        --price-expensive: #c62828;
+      }
+
+      @media (prefers-color-scheme: dark) {
+        :root {
+          background: #0b1220;
+          color: #e5edf8;
+          --page: #0b1220;
+          --surface: #101a2a;
+          --surface-muted: #142033;
+          --border: #26364c;
+          --text: #e5edf8;
+          --muted: #91a4bd;
+          --accent: #70d5c0;
+          --accent-soft: #17352f;
+          --hand: #70d5c0;
+          --dial: #52657d;
+          --error: #ff9d9d;
+          --price-cheap: #66d98a;
+          --price-middle: #ffd45c;
+          --price-expensive: #ff8585;
+        }
+
+        .price-label.passed {
+          fill: #78869a;
+        }
+
+        .hour-label.passed {
+          fill: #78869a;
+        }
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        padding: 40px 20px;
+        background: var(--page);
+        color: var(--text);
+      }
+
+      main {
+        width: min(100%, 900px);
+        margin: 0 auto;
+      }
+
+      header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 24px;
+        margin-bottom: 22px;
+      }
+
+      .eyebrow {
+        margin: 0;
+        color: var(--accent);
+        font-size: 0.75rem;
+        font-weight: 700;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+      }
+
+      .brand-line {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      button {
+        flex: 0 0 auto;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 10px 15px;
+        background: var(--surface);
+        color: var(--text);
+        font: inherit;
+        font-weight: 650;
+        cursor: pointer;
+      }
+
+      button:hover:not(:disabled) {
+        border-color: var(--accent);
+      }
+
+      button:focus-visible,
+      summary:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 3px;
+      }
+
+      button:disabled {
+        cursor: wait;
+        opacity: 0.65;
+      }
+
+      .panel {
+        overflow: hidden;
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        background: var(--surface);
+        box-shadow: 0 18px 48px rgb(20 40 65 / 8%);
+      }
+
+      .clock-panel {
+        overflow: visible;
+        border: 0;
+        border-radius: 0;
+        background: transparent;
+        box-shadow: none;
+      }
+
+      .status-separator {
+        color: var(--muted);
+        font-size: 0.8rem;
+      }
+
+      #status {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: var(--muted);
+        font-size: 0.8rem;
+      }
+
+      #status::before {
+        width: 8px;
+        height: 8px;
+        flex: 0 0 auto;
+        border-radius: 50%;
+        background: #8292a7;
+        content: "";
+      }
+
+      #status[data-state="loading"]::before {
+        background: #d69c27;
+      }
+
+      #status[data-state="success"]::before {
+        background: var(--accent);
+      }
+
+      #status[data-state="error"] {
+        color: var(--error);
+      }
+
+      #status[data-state="error"]::before {
+        background: var(--error);
+      }
+
+      .clock-wrap {
+        padding: clamp(10px, 4vw, 28px);
+      }
+
+      #clock {
+        display: block;
+        width: min(100%, 720px);
+        height: auto;
+        margin: 0 auto;
+        overflow: visible;
+      }
+
+      .dial-ring,
+      .dial-tick {
+        fill: none;
+        stroke: var(--dial);
+      }
+
+      .dial-ring {
+        stroke-width: 1.5;
+      }
+
+      .dial-tick {
+        stroke-width: 1.5;
+      }
+
+      .dial-tick.hour-tick {
+        stroke-width: 2.5;
+      }
+
+      .hour-label {
+        fill: var(--text);
+        font-size: 32px;
+        font-weight: 700;
+        text-anchor: middle;
+        dominant-baseline: middle;
+      }
+
+      .hour-label.passed {
+        fill: #929baa;
+      }
+
+      .price-label {
+        fill: var(--muted);
+        font-size: 10px;
+        font-variant-numeric: tabular-nums;
+        text-anchor: middle;
+        dominant-baseline: middle;
+      }
+
+      .price-label.cheap,
+      .current-price.cheap {
+        fill: var(--price-cheap);
+      }
+
+      .price-label.middle,
+      .current-price.middle {
+        fill: var(--price-middle);
+      }
+
+      .price-label.expensive,
+      .current-price.expensive {
+        fill: var(--price-expensive);
+      }
+
+      .price-label.passed {
+        fill: #929baa;
+      }
+
+      .price-label.current {
+        font-weight: 800;
+        text-decoration: underline;
+        text-underline-offset: 2px;
+      }
+
+      #hand {
+        stroke: var(--hand);
+        stroke-linecap: round;
+        stroke-width: 4;
+      }
+
+      .clock-center {
+        fill: var(--text);
+        font-size: 34px;
+        font-variant-numeric: tabular-nums;
+        font-weight: 750;
+        text-anchor: middle;
+      }
+
+      .center-caption {
+        fill: var(--muted);
+        font-size: 13px;
+        text-anchor: middle;
+      }
+
+      .current-price {
+        fill: var(--accent);
+        font-size: 20px;
+        font-variant-numeric: tabular-nums;
+        font-weight: 750;
+        text-anchor: middle;
+      }
+
+      .json-details {
+        margin-top: 18px;
+      }
+
+      .json-details summary {
+        padding: 16px 18px;
+        color: var(--muted);
+        cursor: pointer;
+        font-size: 0.9rem;
+        font-weight: 650;
+      }
+
+      pre {
+        max-height: 60vh;
+        overflow: auto;
+        margin: 0;
+        padding: 18px;
+        border-top: 1px solid var(--border);
+        background: var(--surface-muted);
+        color: var(--text);
+        font: 0.82rem/1.6 ui-monospace, SFMono-Regular, Consolas, monospace;
+        tab-size: 2;
+      }
+
+      @media (max-width: 560px) {
+        body {
+          padding: 28px 12px;
+        }
+
+        header {
+          flex-direction: column;
+          gap: 16px;
+        }
+
+        .hour-label {
+          font-size: 18px;
+        }
+
+        .price-label {
+          font-size: 10px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <div class="brand-line">
+          <p id="eyebrow" class="eyebrow">Elpriser SE3</p>
+          <span class="status-separator" aria-hidden="true">-</span>
+          <span id="status" data-state="loading" role="status" aria-live="polite">Loading…</span>
+        </div>
+        <button id="refresh" type="button">Uppdatera data</button>
+      </header>
+
+      <section class="panel clock-panel" aria-label="24-hour electricity price clock">
+        <div class="clock-wrap">
+          <svg id="clock" viewBox="0 0 800 800" role="img" aria-labelledby="clock-title clock-description">
+            <title id="clock-title">24-hour electricity price clock for SE3</title>
+            <desc id="clock-description">Prices are shown for every 15-minute period. The single hand shows Sweden time. Midnight is at the top of the clock. After 14:00, tomorrow's prices are shown and marked (+1).</desc>
+            <circle class="dial-ring" cx="400" cy="400" r="350"></circle>
+            <g id="ticks"></g>
+            <g id="labels"></g>
+            <line id="hand" x1="400" y1="400" x2="400" y2="190"></line>
+            <text id="clock-time" class="clock-center" x="400" y="386">--:--</text>
+            <text class="center-caption" x="400" y="414">SWEDEN TIME</text>
+            <text id="current-price" class="current-price" x="400" y="446">-- SEK/kWh</text>
+          </svg>
+        </div>
+      </section>
+
+      <details id="api-response" class="panel json-details" hidden>
+        <summary>View the original API response as formatted JSON</summary>
+        <pre id="response" aria-label="JSON response">Loading data…</pre>
+      </details>
+    </main>
+
+    <script>
+      const SHOW_API_RESPONSE = false;
+      const refreshButton = document.querySelector("#refresh");
+      const responseElement = document.querySelector("#response");
+      const apiResponseElement = document.querySelector("#api-response");
+      const statusElement = document.querySelector("#status");
+      const eyebrowElement = document.querySelector("#eyebrow");
+      const labelsElement = document.querySelector("#labels");
+      const ticksElement = document.querySelector("#ticks");
+      const handElement = document.querySelector("#hand");
+      const timeElement = document.querySelector("#clock-time");
+      const currentPriceElement = document.querySelector("#current-price");
+      const swedishClockFormat = new Intl.DateTimeFormat("en-GB", {
+        timeZone: "Europe/Stockholm",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        hourCycle: "h23"
+      });
+      const swedishDatePartsFormat = new Intl.DateTimeFormat("en-CA", {
+        timeZone: "Europe/Stockholm",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit"
+      });
+      const swedishDateFormat = new Intl.DateTimeFormat("en-GB", {
+        timeZone: "Europe/Stockholm",
+        year: "numeric",
+        month: "long",
+        day: "numeric"
+      });
+      const swedishPeriodFormat = new Intl.DateTimeFormat("en-GB", {
+        timeZone: "Europe/Stockholm",
+        hour: "2-digit",
+        minute: "2-digit",
+        hourCycle: "h23"
+      });
+      const swedishHourFormat = new Intl.DateTimeFormat("en-GB", {
+        timeZone: "Europe/Stockholm",
+        hour: "2-digit",
+        hourCycle: "h23"
+      });
+      let quarterHourPrices = [];
+      let showTomorrow = false;
+      let displayedDate = "";
+
+      apiResponseElement.hidden = !SHOW_API_RESPONSE;
+
+      function stockholmDate(now, daysToAdd = 0) {
+        const parts = Object.fromEntries(
+          swedishDatePartsFormat.formatToParts(now).map(({ type, value }) => [type, value])
+        );
+        const date = new Date(Date.UTC(
+          Number(parts.year),
+          Number(parts.month) - 1,
+          Number(parts.day) + daysToAdd
+        ));
+        return date.toISOString().slice(0, 10);
+      }
+
+      function apiUrlForDate(date) {
+        const [year, month, day] = date.split("-");
+        return `https://www.elprisetjustnu.se/api/v1/prices/${year}/${month}-${day}_SE3.json`;
+      }
+
+      function setDisplayedDate(date, isTomorrow) {
+        const displayDate = new Date(`${date}T12:00:00Z`);
+        const formattedDate = swedishDateFormat.format(displayDate);
+        const dateLabel = isTomorrow ? `${formattedDate} (+1)` : formattedDate;
+        eyebrowElement.textContent = `Elpriser SE3 · ${dateLabel}`;
+      }
+
+      function renderClock() {
+        const now = new Date();
+        const timeParts = Object.fromEntries(
+          swedishClockFormat.formatToParts(now).map(({ type, value }) => [type, value])
+        );
+        const hours = Number(timeParts.hour);
+        const minutes = Number(timeParts.minute);
+        const seconds = Number(timeParts.second);
+        const angle = ((hours + minutes / 60 + seconds / 3600) / 24) * Math.PI * 2 - Math.PI / 2;
+        const handRadius = 210;
+
+        handElement.setAttribute("x2", String(400 + Math.cos(angle) * handRadius));
+        handElement.setAttribute("y2", String(400 + Math.sin(angle) * handRadius));
+        timeElement.textContent = `${timeParts.hour}:${timeParts.minute}`;
+
+        const periodIndex = hours * 4 + Math.floor(minutes / 15);
+        const price = quarterHourPrices[periodIndex];
+        currentPriceElement.classList.remove("cheap", "middle", "expensive");
+        if (price !== undefined) {
+          currentPriceElement.classList.add(priceCategory(price, priceThresholds));
+        }
+        currentPriceElement.textContent = price === undefined
+          ? "-- SEK/kWh"
+          : `${price.toFixed(2)} SEK/kWh`;
+
+        for (const label of labelsElement.querySelectorAll(".price-label")) {
+          label.classList.toggle("current", Number(label.dataset.period) === periodIndex);
+          label.classList.toggle("passed", Number(label.dataset.period) < periodIndex);
+        }
+
+        for (const label of labelsElement.querySelectorAll(".hour-label")) {
+          label.classList.toggle("passed", Number(label.dataset.hour) < hours);
+        }
+      }
+
+      let priceThresholds = { firstThird: 0, secondThird: 0 };
+
+      function priceCategory(price, thresholds) {
+        if (price <= thresholds.firstThird) {
+          return "cheap";
+        }
+        if (price <= thresholds.secondThird) {
+          return "middle";
+        }
+        return "expensive";
+      }
+
+      function renderPrices(prices) {
+        quarterHourPrices = Array(96);
+        for (const entry of prices) {
+          const startTime = new Date(entry.time_start);
+          if (!Number.isFinite(startTime.getTime()) || !Number.isFinite(entry.SEK_per_kWh)) {
+            continue;
+          }
+
+          const timeParts = Object.fromEntries(
+            swedishPeriodFormat.formatToParts(startTime).map(({ type, value }) => [type, value])
+          );
+          const hour = Number(timeParts.hour);
+          const minute = Number(timeParts.minute);
+          if (hour >= 0 && hour < 24 && minute >= 0 && minute < 60 && minute % 15 === 0) {
+            quarterHourPrices[hour * 4 + minute / 15] = entry.SEK_per_kWh;
+          }
+        }
+
+        const validPrices = quarterHourPrices.filter((price) => price !== undefined);
+        if (validPrices.length > 0) {
+          const minimum = Math.min(...validPrices);
+          const maximum = Math.max(...validPrices);
+          const third = (maximum - minimum) / 3;
+          priceThresholds = {
+            firstThird: minimum + third,
+            secondThird: minimum + third * 2
+          };
+        }
+
+        labelsElement.replaceChildren();
+        ticksElement.replaceChildren();
+        const dateSuffix = showTomorrow ? " (+1)" : "";
+
+        for (let period = 0; period < 96; period += 1) {
+          const angle = (period / 96) * Math.PI * 2 - Math.PI / 2;
+          const cos = Math.cos(angle);
+          const sin = Math.sin(angle);
+          const tick = document.createElementNS("http://www.w3.org/2000/svg", "line");
+          tick.setAttribute("class", period % 4 === 0 ? "dial-tick hour-tick" : "dial-tick");
+          tick.setAttribute("x1", String(400 + cos * 326));
+          tick.setAttribute("y1", String(400 + sin * 326));
+          const tickLength = period % 4 === 0 ? 12 : 6;
+          tick.setAttribute("x2", String(400 + cos * (326 + tickLength)));
+          tick.setAttribute("y2", String(400 + sin * (326 + tickLength)));
+          ticksElement.append(tick);
+
+          const priceLabel = document.createElementNS("http://www.w3.org/2000/svg", "text");
+          priceLabel.setAttribute("class", "price-label");
+          priceLabel.setAttribute("x", String(400 + cos * 356));
+          priceLabel.setAttribute("y", String(400 + sin * 356));
+          priceLabel.dataset.period = String(period);
+          const price = quarterHourPrices[period];
+          if (price !== undefined) {
+            priceLabel.classList.add(priceCategory(price, priceThresholds));
+          }
+          priceLabel.textContent = price === undefined ? "—" : price.toFixed(2);
+          labelsElement.append(priceLabel);
+        }
+
+        for (let hour = 0; hour < 24; hour += 1) {
+          const angle = (hour / 24) * Math.PI * 2 - Math.PI / 2;
+          const hourLabel = document.createElementNS("http://www.w3.org/2000/svg", "text");
+          hourLabel.setAttribute("class", "hour-label");
+          hourLabel.setAttribute("x", String(400 + Math.cos(angle) * 282));
+          hourLabel.setAttribute("y", String(400 + Math.sin(angle) * 282));
+          hourLabel.dataset.hour = String(hour);
+          hourLabel.textContent = `${String(hour).padStart(2, "0")}${dateSuffix}`;
+          labelsElement.append(hourLabel);
+        }
+
+        renderClock();
+      }
+
+      async function loadPrices() {
+        refreshButton.disabled = true;
+        statusElement.dataset.state = "loading";
+        statusElement.textContent = "Loading…";
+        responseElement.textContent = "Loading data…";
+
+        try {
+          const now = new Date();
+          const hourInSweden = Number(swedishHourFormat.format(now));
+          showTomorrow = hourInSweden >= 14;
+          const date = stockholmDate(now, showTomorrow ? 1 : 0);
+          displayedDate = date;
+          const apiUrl = apiUrlForDate(date);
+          setDisplayedDate(date, showTomorrow);
+          console.info(`GET ${apiUrl}`);
+
+          const response = await fetch(apiUrl);
+          if (!response.ok) {
+            throw new Error(`Request failed: ${response.status} ${response.statusText}`);
+          }
+
+          const prices = await response.json();
+          if (!Array.isArray(prices)) {
+            throw new Error("The API response was not a JSON array.");
+          }
+
+          responseElement.textContent = JSON.stringify(prices, null, 2);
+          renderPrices(prices);
+          console.info(`Loaded ${prices.length} price readings`);
+          statusElement.dataset.state = "success";
+          statusElement.textContent = "Prices loaded";
+        } catch (error) {
+          console.error("Could not load electricity prices:", error);
+          responseElement.textContent = error instanceof Error
+            ? error.message
+            : "An unexpected error occurred.";
+          statusElement.dataset.state = "error";
+          statusElement.textContent = "Could not load data";
+          renderPrices([]);
+          currentPriceElement.textContent = "Data unavailable";
+        } finally {
+          refreshButton.disabled = false;
+        }
+      }
+
+      function checkForDateChange() {
+        const now = new Date();
+        const shouldShowTomorrow = Number(swedishHourFormat.format(now)) >= 14;
+        const date = stockholmDate(now, shouldShowTomorrow ? 1 : 0);
+        if (shouldShowTomorrow !== showTomorrow || date !== displayedDate) {
+          loadPrices();
+        }
+      }
+
+      refreshButton.addEventListener("click", loadPrices);
+      window.setInterval(() => {
+        renderClock();
+        checkForDateChange();
+      }, 1000);
+      loadPrices();
+    </script>
+  </body>
+</html>
