@@ -462,7 +462,7 @@
         <div class="clock-wrap">
           <svg id="clock" viewBox="0 0 800 800" role="img" aria-labelledby="clock-title clock-description">
             <title id="clock-title">24-hour electricity price clock for SE3</title>
-            <desc id="clock-description">Prices are shown for every 15-minute period. The single hand shows Sweden time. Midnight is at the top of the clock. After 14:00, tomorrow's prices are shown and marked (+1).</desc>
+            <desc id="clock-description">Prices are shown for every 15-minute period. The single hand shows Sweden time. Midnight is at the top of the clock. After 14:00, today's remaining prices are shown alongside tomorrow's prices for elapsed hours.</desc>
             <circle class="dial-ring" cx="400" cy="400" r="350"></circle>
             <g id="ticks"></g>
             <g id="labels"></g>
@@ -476,10 +476,10 @@
       </section>
 
       <section class="price-chart-section" aria-label="Electricity prices over the day">
-        <h2 class="price-chart-title">Elpris under dygnet (SEK/kWh)</h2>
+        <h2 class="price-chart-title">Elpris senaste och kommande 12 timmar (SEK/kWh)</h2>
         <svg id="price-chart" viewBox="0 0 800 320" role="img" aria-labelledby="price-chart-title price-chart-description">
           <title id="price-chart-title">Electricity price graph for the day</title>
-          <desc id="price-chart-description">Each point represents a 15-minute electricity price. Elapsed periods are grey; upcoming prices use the same price colors as the clock.</desc>
+          <desc id="price-chart-description">Each point represents a 15-minute electricity price in a rolling 24-hour window, with 12 hours before and after now. Hours on the following date are marked +.</desc>
           <g id="chart-grid"></g>
           <g id="chart-data"></g>
           <line id="chart-now" x1="68" y1="28" x2="68" y2="330"></line>
@@ -547,7 +547,10 @@
         hourCycle: "h23"
       });
       let quarterHourPrices = [];
-      let showTomorrow = false;
+      let tomorrowQuarterHourPrices = [];
+      let displayQuarterHourPrices = [];
+      let timedPrices = new Map();
+      let showTomorrowPrices = false;
       let displayedDate = "";
       const areaStorageKey = "elpriser-area";
       const validAreas = ["SE1", "SE2", "SE3", "SE4"];
@@ -580,11 +583,25 @@
         return `https://www.elprisetjustnu.se/api/v1/prices/${year}/${month}-${day}_${area}.json`;
       }
 
-      function setDisplayedDate(date, isTomorrow) {
+      async function fetchPricesForDate(date, area) {
+        const apiUrl = apiUrlForDate(date, area);
+        console.info(`GET ${apiUrl}`);
+        const response = await fetch(apiUrl);
+        if (!response.ok) {
+          throw new Error(`Request failed for ${date}: ${response.status} ${response.statusText}`);
+        }
+
+        const prices = await response.json();
+        if (!Array.isArray(prices)) {
+          throw new Error(`The API response for ${date} was not a JSON array.`);
+        }
+        return prices;
+      }
+
+      function setDisplayedDate(date) {
         const displayDate = new Date(`${date}T12:00:00Z`);
         const formattedDate = swedishDateFormat.format(displayDate);
-        const dateLabel = isTomorrow ? `${formattedDate} (+1)` : formattedDate;
-        eyebrowElement.textContent = `Elpriser ${areaSelect.value} · ${dateLabel}`;
+        eyebrowElement.textContent = `Elpriser ${areaSelect.value} · ${formattedDate}`;
       }
 
       function renderClock() {
@@ -595,6 +612,7 @@
         const hours = Number(timeParts.hour);
         const minutes = Number(timeParts.minute);
         const seconds = Number(timeParts.second);
+        const elapsedPeriods = hours * 4 + minutes / 15 + seconds / 900;
         const angle = ((hours + minutes / 60 + seconds / 3600) / 24) * Math.PI * 2 - Math.PI / 2;
         const handRadius = 260;
 
@@ -603,8 +621,10 @@
         timeElement.textContent = `${timeParts.hour}:${timeParts.minute}`;
 
         const periodIndex = hours * 4 + Math.floor(minutes / 15);
-        const elapsedPeriods = hours * 4 + minutes / 15 + seconds / 900;
-        const nowX = chartPlot.left + (elapsedPeriods / 96) * (chartPlot.right - chartPlot.left);
+        const currentHour = hours;
+        const quarterProgress = (now.getTime() % 900000) / 900000;
+        const nowX = chartPlot.left
+          + ((48 + quarterProgress) / 96) * (chartPlot.right - chartPlot.left);
         chartNowElement.setAttribute("x1", String(nowX));
         chartNowElement.setAttribute("x2", String(nowX));
 
@@ -618,15 +638,32 @@
           : `${price.toFixed(2)} SEK/kWh`;
 
         for (const label of labelsElement.querySelectorAll(".price-label")) {
+          const period = Number(label.dataset.period);
+          const periodsBehind = elapsedPeriods - period;
           label.classList.toggle("current", Number(label.dataset.period) === periodIndex);
-          label.classList.toggle("passed", Number(label.dataset.period) < periodIndex);
+          label.classList.toggle(
+            "passed",
+            showTomorrowPrices
+              ? period < periodIndex && periodsBehind <= 24
+              : period < periodIndex
+          );
         }
 
+        const elapsedHours = hours + minutes / 60 + seconds / 3600;
         for (const label of labelsElement.querySelectorAll(".hour-label")) {
-          label.classList.toggle("passed", Number(label.dataset.hour) < hours);
+          const hour = Number(label.dataset.hour);
+          const hoursBehind = elapsedHours - hour;
+          label.classList.toggle(
+            "passed",
+            showTomorrowPrices
+              ? hour < currentHour && hoursBehind <= 6
+              : hour < currentHour
+          );
         }
+        const chartPeriod = 48 + (now.getTime() % 900000) / 900000;
         for (const element of chartDataElement.querySelectorAll("[data-period]")) {
-          element.classList.toggle("passed", Number(element.dataset.period) < periodIndex);
+          const period = Number(element.dataset.period);
+          element.classList.toggle("passed", period < chartPeriod);
         }
       }
 
@@ -647,7 +684,7 @@
         chartDataElement.replaceChildren();
         chartLabelsElement.replaceChildren();
 
-        const validPrices = quarterHourPrices.filter((price) => price !== undefined);
+        const validPrices = [...timedPrices.values()];
         if (validPrices.length === 0) {
           chartNowElement.setAttribute("y1", String(chartPlot.top));
           chartNowElement.setAttribute("y2", String(chartPlot.bottom));
@@ -687,19 +724,31 @@
           chartLabelsElement.append(priceLabel);
         }
 
-        for (let hour = 0; hour <= 24; hour += 6) {
-          const x = xForPeriod(hour * 4);
+        const now = new Date();
+        const nowTimestamp = now.getTime();
+        const startTimestamp = Math.floor(nowTimestamp / 900000) * 900000 - 12 * 60 * 60 * 1000;
+        const currentDate = stockholmDate(now);
+
+        for (const period of [0, 24, 48, 72, 96]) {
+          const timestamp = startTimestamp + period * 900000;
+          const date = stockholmDate(new Date(timestamp));
+          const parts = Object.fromEntries(
+            swedishPeriodFormat.formatToParts(new Date(timestamp))
+              .map(({ type, value }) => [type, value])
+          );
+          const x = xForPeriod(period);
           const label = document.createElementNS("http://www.w3.org/2000/svg", "text");
           label.setAttribute("class", "chart-axis-label");
           label.setAttribute("x", String(x));
           label.setAttribute("y", "294");
-          label.setAttribute("text-anchor", hour === 0 ? "start" : hour === 24 ? "end" : "middle");
-          label.textContent = String(hour).padStart(2, "0");
+          label.setAttribute("text-anchor", period === 0 ? "start" : period === 96 ? "end" : "middle");
+          label.textContent = `${parts.hour}${date > currentDate ? " +" : ""}`;
           chartLabelsElement.append(label);
         }
 
-        for (let period = 0; period < 96; period += 1) {
-          const price = quarterHourPrices[period];
+        for (let period = 0; period <= 96; period += 1) {
+          const timestamp = startTimestamp + period * 900000;
+          const price = timedPrices.get(timestamp);
           if (price === undefined) {
             continue;
           }
@@ -711,10 +760,12 @@
           point.setAttribute("cy", String(yForPrice(price)));
           point.setAttribute("r", "3");
           point.dataset.period = String(period);
+          point.classList.toggle("passed", timestamp < nowTimestamp);
           chartDataElement.append(point);
 
           const nextPeriod = period + 1;
-          const nextPrice = nextPeriod < 96 ? quarterHourPrices[nextPeriod] : price;
+          const nextTimestamp = startTimestamp + nextPeriod * 900000;
+          const nextPrice = nextPeriod <= 96 ? timedPrices.get(nextTimestamp) : undefined;
           if (nextPrice !== undefined) {
             const segment = document.createElementNS("http://www.w3.org/2000/svg", "line");
             segment.setAttribute("class", `chart-segment ${category}`);
@@ -723,15 +774,23 @@
             segment.setAttribute("x2", String(xForPeriod(Math.min(nextPeriod, 96))));
             segment.setAttribute("y2", String(yForPrice(nextPrice)));
             segment.dataset.period = String(period);
+            segment.classList.toggle("passed", timestamp < nowTimestamp);
             chartDataElement.append(segment);
           }
         }
 
-        renderClock();
+        const nowX = chartPlot.left
+          + ((48 + (nowTimestamp % 900000) / 900000) / 96)
+          * (chartPlot.right - chartPlot.left);
+        chartNowElement.setAttribute("x1", String(nowX));
+        chartNowElement.setAttribute("x2", String(nowX));
+        chartNowElement.setAttribute("y1", String(chartPlot.top));
+        chartNowElement.setAttribute("y2", String(chartPlot.bottom));
       }
 
-      function renderPrices(prices) {
-        quarterHourPrices = Array(96);
+      function parsePrices(prices) {
+        const periodPrices = Array(96);
+        const byTimestamp = new Map();
         for (const entry of prices) {
           const startTime = new Date(entry.time_start);
           if (!Number.isFinite(startTime.getTime()) || !Number.isFinite(entry.SEK_per_kWh)) {
@@ -744,11 +803,29 @@
           const hour = Number(timeParts.hour);
           const minute = Number(timeParts.minute);
           if (hour >= 0 && hour < 24 && minute >= 0 && minute < 60 && minute % 15 === 0) {
-            quarterHourPrices[hour * 4 + minute / 15] = entry.SEK_per_kWh;
+            periodPrices[hour * 4 + minute / 15] = entry.SEK_per_kWh;
+            byTimestamp.set(startTime.getTime(), entry.SEK_per_kWh);
           }
         }
 
-        const validPrices = quarterHourPrices.filter((price) => price !== undefined);
+        return { periodPrices, byTimestamp };
+      }
+
+      function renderPrices() {
+        const validPrices = [...quarterHourPrices, ...tomorrowQuarterHourPrices]
+          .filter((price) => price !== undefined);
+        const nowParts = Object.fromEntries(
+          swedishClockFormat.formatToParts(new Date())
+            .map(({ type, value }) => [type, value])
+        );
+        const nowPeriod = Number(nowParts.hour) * 4
+          + Math.floor(Number(nowParts.minute) / 15);
+        displayedPeriod = nowPeriod;
+        displayQuarterHourPrices = quarterHourPrices.map((price, period) => (
+          showTomorrowPrices && period < nowPeriod
+            ? tomorrowQuarterHourPrices[period]
+            : price
+        ));
         if (validPrices.length > 0) {
           const minimum = Math.min(...validPrices);
           const maximum = Math.max(...validPrices);
@@ -763,7 +840,6 @@
 
         labelsElement.replaceChildren();
         ticksElement.replaceChildren();
-        const dateSuffix = showTomorrow ? " (+1)" : "";
 
         for (let period = 0; period < 96; period += 1) {
           const angle = (period / 96) * Math.PI * 2 - Math.PI / 2;
@@ -783,7 +859,7 @@
           priceLabel.setAttribute("x", String(400 + cos * 356));
           priceLabel.setAttribute("y", String(400 + sin * 356));
           priceLabel.dataset.period = String(period);
-          const price = quarterHourPrices[period];
+          const price = displayQuarterHourPrices[period];
           if (price !== undefined) {
             priceLabel.classList.add(priceCategory(price, priceThresholds));
           }
@@ -798,6 +874,11 @@
           hourLabel.setAttribute("x", String(400 + Math.cos(angle) * 282));
           hourLabel.setAttribute("y", String(400 + Math.sin(angle) * 282));
           hourLabel.dataset.hour = String(hour);
+          const dateSuffix = showTomorrowPrices
+            && hour < Number(nowParts.hour)
+            && (Number(nowParts.hour) + Number(nowParts.minute) / 60 - hour) > 6
+            ? " +"
+            : "";
           hourLabel.textContent = `${String(hour).padStart(2, "0")}${dateSuffix}`;
           labelsElement.append(hourLabel);
         }
@@ -816,26 +897,47 @@
         try {
           const now = new Date();
           const hourInSweden = Number(swedishHourFormat.format(now));
-          showTomorrow = hourInSweden >= 14;
-          const date = stockholmDate(now, showTomorrow ? 1 : 0);
+          const shouldShowTomorrowPrices = hourInSweden >= 14;
+          const shouldLoadHistoryPrices = hourInSweden < 12;
+          const date = stockholmDate(now);
+          const tomorrowDate = stockholmDate(now, 1);
+          const yesterdayDate = stockholmDate(now, -1);
           displayedDate = date;
-          const apiUrl = apiUrlForDate(date, areaSelect.value);
-          setDisplayedDate(date, showTomorrow);
-          console.info(`GET ${apiUrl}`);
+          showTomorrowPrices = shouldShowTomorrowPrices;
+          setDisplayedDate(date);
 
-          const response = await fetch(apiUrl);
-          if (!response.ok) {
-            throw new Error(`Request failed: ${response.status} ${response.statusText}`);
-          }
+          const [historyPrices, todayPrices, tomorrowPrices] = await Promise.all([
+            shouldLoadHistoryPrices
+              ? fetchPricesForDate(yesterdayDate, areaSelect.value)
+              : Promise.resolve([]),
+            fetchPricesForDate(date, areaSelect.value),
+            shouldShowTomorrowPrices
+              ? fetchPricesForDate(tomorrowDate, areaSelect.value)
+              : Promise.resolve([])
+          ]);
+          const parsedHistoryPrices = parsePrices(historyPrices);
+          const parsedTodayPrices = parsePrices(todayPrices);
+          quarterHourPrices = parsedTodayPrices.periodPrices;
+          const parsedTomorrowPrices = parsePrices(tomorrowPrices);
+          tomorrowQuarterHourPrices = parsedTomorrowPrices.periodPrices;
+          timedPrices = new Map([
+            ...parsedHistoryPrices.byTimestamp,
+            ...parsedTodayPrices.byTimestamp,
+            ...parsedTomorrowPrices.byTimestamp
+          ]);
 
-          const prices = await response.json();
-          if (!Array.isArray(prices)) {
-            throw new Error("The API response was not a JSON array.");
-          }
-
-          responseElement.textContent = JSON.stringify(prices, null, 2);
-          renderPrices(prices);
-          console.info(`Loaded ${prices.length} price readings`);
+          responseElement.textContent = JSON.stringify({
+            ...(shouldLoadHistoryPrices ? { [yesterdayDate]: historyPrices } : {}),
+            [date]: todayPrices,
+            ...(shouldShowTomorrowPrices ? { [tomorrowDate]: tomorrowPrices } : {})
+          }, null, 2);
+          renderPrices();
+          console.info(
+            `Loaded ${todayPrices.length} price readings for ${date}`
+            + (shouldShowTomorrowPrices
+              ? ` and ${tomorrowPrices.length} for ${tomorrowDate}`
+              : "")
+          );
           statusElement.dataset.state = "success";
           statusElement.textContent = "Prices loaded";
         } catch (error) {
@@ -845,7 +947,10 @@
             : "An unexpected error occurred.";
           statusElement.dataset.state = "error";
           statusElement.textContent = "Could not load data";
-          renderPrices([]);
+          quarterHourPrices = [];
+          tomorrowQuarterHourPrices = [];
+          timedPrices = new Map();
+          renderPrices();
           currentPriceElement.textContent = "Data unavailable";
         } finally {
           refreshButton.disabled = false;
@@ -853,12 +958,23 @@
         }
       }
 
+      let displayedPeriod = -1;
+
       function checkForDateChange() {
         const now = new Date();
-        const shouldShowTomorrow = Number(swedishHourFormat.format(now)) >= 14;
-        const date = stockholmDate(now, shouldShowTomorrow ? 1 : 0);
-        if (shouldShowTomorrow !== showTomorrow || date !== displayedDate) {
+        const shouldShowTomorrowPrices = Number(swedishHourFormat.format(now)) >= 14;
+        const date = stockholmDate(now);
+        if (shouldShowTomorrowPrices !== showTomorrowPrices || date !== displayedDate) {
           loadPrices();
+          return;
+        }
+
+        const timeParts = Object.fromEntries(
+          swedishClockFormat.formatToParts(now).map(({ type, value }) => [type, value])
+        );
+        const period = Number(timeParts.hour) * 4 + Math.floor(Number(timeParts.minute) / 15);
+        if (period !== displayedPeriod) {
+          renderPrices();
         }
       }
 
