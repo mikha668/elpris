@@ -202,6 +202,12 @@
         font-weight: 600;
       }
 
+      .price-chart-source {
+        margin: 0 0 8px;
+        color: var(--muted);
+        font-size: 0.65rem;
+      }
+
       #price-chart {
         display: block;
         width: 100%;
@@ -456,7 +462,7 @@
             <line id="hand" x1="400" y1="400" x2="400" y2="190"></line>
             <circle class="clock-center-mask" cx="400" cy="400" r="86"></circle>
             <text id="clock-time" class="clock-center" x="400" y="386">--:--</text>
-            <text class="center-caption" x="400" y="414">CET</text>
+            <text id="timezone-label" class="center-caption" x="400" y="414"></text>
             <text id="current-price" class="current-price" x="400" y="446">-- SEK/kWh</text>
           </svg>
         </div>
@@ -472,6 +478,7 @@
           <line id="chart-now" x1="68" y1="28" x2="68" y2="330"></line>
           <g id="chart-labels"></g>
         </svg>
+        <p class="price-chart-source">Data från elprisetjustnu.se</p>
       </section>
 
       <details id="api-response" class="panel json-details" hidden>
@@ -481,6 +488,7 @@
     </main>
 
     <script>
+      //Derkert 2026
       const SHOW_API_RESPONSE = false;
       const refreshButton = document.querySelector("#refresh");
       const areaSelect = document.querySelector("#area-select");
@@ -492,12 +500,15 @@
       const ticksElement = document.querySelector("#ticks");
       const handElement = document.querySelector("#hand");
       const timeElement = document.querySelector("#clock-time");
+      const timeZoneLabelElement = document.querySelector("#timezone-label");
       const currentPriceElement = document.querySelector("#current-price");
       const chartGridElement = document.querySelector("#chart-grid");
       const chartDataElement = document.querySelector("#chart-data");
       const chartNowElement = document.querySelector("#chart-now");
       const chartLabelsElement = document.querySelector("#chart-labels");
       const chartPlot = { left: 68, right: 780, top: 22, bottom: 258 };
+      const deviceTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      timeZoneLabelElement.textContent = deviceTimeZone;
       const swedishClockFormat = new Intl.DateTimeFormat("en-GB", {
         timeZone: "Europe/Stockholm",
         hour: "2-digit",
