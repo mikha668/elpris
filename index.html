@@ -586,7 +586,7 @@
       async function fetchPricesForDate(date, area) {
         const apiUrl = apiUrlForDate(date, area);
         console.info(`GET ${apiUrl}`);
-        const response = await fetch(apiUrl);
+        const response = await fetch(apiUrl, { cache: "no-store" });
         if (!response.ok) {
           throw new Error(`Request failed for ${date}: ${response.status} ${response.statusText}`);
         }
@@ -742,7 +742,7 @@
           label.setAttribute("x", String(x));
           label.setAttribute("y", "294");
           label.setAttribute("text-anchor", period === 0 ? "start" : period === 96 ? "end" : "middle");
-          label.textContent = `${parts.hour}${date > currentDate ? " +" : ""}`;
+          label.textContent = `${parts.hour}${date > currentDate ? "+" : ""}`;
           chartLabelsElement.append(label);
         }
 
