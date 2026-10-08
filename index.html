@@ -89,6 +89,16 @@
         text-transform: uppercase;
       }
 
+      .visually-hidden {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        clip-path: inset(50%);
+      }
+
       .brand-line {
         display: flex;
         align-items: center;
@@ -108,17 +118,36 @@
         cursor: pointer;
       }
 
+      .header-controls {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      select {
+        flex: 0 0 auto;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 5px 10px;
+        background: var(--surface);
+        color: var(--text);
+        font: inherit;
+        font-weight: 650;
+      }
+
       button:hover:not(:disabled) {
         border-color: var(--accent);
       }
 
       button:focus-visible,
+      select:focus-visible,
       summary:focus-visible {
         outline: 2px solid var(--accent);
         outline-offset: 3px;
       }
 
-      button:disabled {
+      button:disabled,
+      select:disabled {
         cursor: wait;
         opacity: 0.65;
       }
@@ -178,7 +207,7 @@
       }
 
       .clock-wrap {
-        padding: clamp(10px, 4vw, 28px);
+        padding: clamp(4px, 2vw, 14px) clamp(10px, 4vw, 28px);
       }
 
       #clock {
@@ -187,6 +216,71 @@
         height: auto;
         margin: 0 auto;
         overflow: visible;
+      }
+
+      .price-chart-section {
+        width: min(100%, 720px);
+        margin: 0 auto;
+      }
+
+      .price-chart-title {
+        margin: 6px 0 0;
+        color: var(--muted);
+        font-size: 0.9rem;
+        font-weight: 600;
+      }
+
+      #price-chart {
+        display: block;
+        width: 100%;
+        height: auto;
+        overflow: visible;
+      }
+
+      .chart-grid-line {
+        stroke: var(--border);
+        stroke-width: 1;
+      }
+
+      .chart-axis-label {
+        fill: var(--muted);
+        font-size: 14px;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .chart-segment {
+        stroke-linecap: round;
+        stroke-width: 4;
+      }
+
+      .chart-segment.cheap,
+      .chart-point.cheap {
+        stroke: var(--price-cheap);
+        fill: var(--price-cheap);
+      }
+
+      .chart-segment.middle,
+      .chart-point.middle {
+        stroke: var(--price-middle);
+        fill: var(--price-middle);
+      }
+
+      .chart-segment.expensive,
+      .chart-point.expensive {
+        stroke: var(--price-expensive);
+        fill: var(--price-expensive);
+      }
+
+      .chart-segment.passed,
+      .chart-point.passed {
+        stroke: #929baa;
+        fill: #929baa;
+      }
+
+      #chart-now {
+        stroke: var(--accent);
+        stroke-dasharray: 4 5;
+        stroke-width: 2;
       }
 
       .dial-ring,
@@ -314,6 +408,10 @@
           gap: 16px;
         }
 
+        .header-controls {
+          width: 100%;
+        }
+
         .clock-wrap {
           margin-inline: -4px;
           padding: 0;
@@ -321,6 +419,23 @@
 
         #clock {
           width: 100%;
+        }
+
+        .price-chart-title {
+          padding-inline: 8px;
+          font-size: 0.85rem;
+        }
+
+        .chart-axis-label {
+          font-size: 17px;
+        }
+
+        .chart-segment {
+          stroke-width: 5;
+        }
+
+        .chart-point {
+          r: 4px;
         }
 
         .hour-label {
@@ -341,7 +456,16 @@
           <span class="status-separator" aria-hidden="true">-</span>
           <span id="status" data-state="loading" role="status" aria-live="polite">Loading…</span>
         </div>
-        <button id="refresh" type="button">Uppdatera data</button>
+        <div class="header-controls">
+          <label for="area-select" class="visually-hidden">Elområde</label>
+          <select id="area-select" aria-label="Elområde">
+            <option value="SE1">SE1</option>
+            <option value="SE2">SE2</option>
+            <option value="SE3">SE3</option>
+            <option value="SE4">SE4</option>
+          </select>
+          <button id="refresh" type="button">Uppdatera data</button>
+        </div>
       </header>
 
       <section class="panel clock-panel" aria-label="24-hour electricity price clock">
@@ -360,6 +484,18 @@
         </div>
       </section>
 
+      <section class="price-chart-section" aria-label="Electricity prices over the day">
+        <h2 class="price-chart-title">Elpris under dygnet (SEK/kWh)</h2>
+        <svg id="price-chart" viewBox="0 0 800 320" role="img" aria-labelledby="price-chart-title price-chart-description">
+          <title id="price-chart-title">Electricity price graph for the day</title>
+          <desc id="price-chart-description">Each point represents a 15-minute electricity price. Elapsed periods are grey; upcoming prices use the same price colors as the clock.</desc>
+          <g id="chart-grid"></g>
+          <g id="chart-data"></g>
+          <line id="chart-now" x1="68" y1="28" x2="68" y2="330"></line>
+          <g id="chart-labels"></g>
+        </svg>
+      </section>
+
       <details id="api-response" class="panel json-details" hidden>
         <summary>View the original API response as formatted JSON</summary>
         <pre id="response" aria-label="JSON response">Loading data…</pre>
@@ -369,6 +505,7 @@
     <script>
       const SHOW_API_RESPONSE = false;
       const refreshButton = document.querySelector("#refresh");
+      const areaSelect = document.querySelector("#area-select");
       const responseElement = document.querySelector("#response");
       const apiResponseElement = document.querySelector("#api-response");
       const statusElement = document.querySelector("#status");
@@ -378,6 +515,11 @@
       const handElement = document.querySelector("#hand");
       const timeElement = document.querySelector("#clock-time");
       const currentPriceElement = document.querySelector("#current-price");
+      const chartGridElement = document.querySelector("#chart-grid");
+      const chartDataElement = document.querySelector("#chart-data");
+      const chartNowElement = document.querySelector("#chart-now");
+      const chartLabelsElement = document.querySelector("#chart-labels");
+      const chartPlot = { left: 68, right: 780, top: 22, bottom: 258 };
       const swedishClockFormat = new Intl.DateTimeFormat("en-GB", {
         timeZone: "Europe/Stockholm",
         hour: "2-digit",
@@ -411,6 +553,17 @@
       let quarterHourPrices = [];
       let showTomorrow = false;
       let displayedDate = "";
+      const areaStorageKey = "elpriser-area";
+      const validAreas = ["SE1", "SE2", "SE3", "SE4"];
+
+      try {
+        const savedArea = localStorage.getItem(areaStorageKey);
+        if (validAreas.includes(savedArea)) {
+          areaSelect.value = savedArea;
+        }
+      } catch (error) {
+        console.warn("Could not read the saved electricity price area:", error);
+      }
 
       apiResponseElement.hidden = !SHOW_API_RESPONSE;
 
@@ -426,16 +579,16 @@
         return date.toISOString().slice(0, 10);
       }
 
-      function apiUrlForDate(date) {
+      function apiUrlForDate(date, area) {
         const [year, month, day] = date.split("-");
-        return `https://www.elprisetjustnu.se/api/v1/prices/${year}/${month}-${day}_SE3.json`;
+        return `https://www.elprisetjustnu.se/api/v1/prices/${year}/${month}-${day}_${area}.json`;
       }
 
       function setDisplayedDate(date, isTomorrow) {
         const displayDate = new Date(`${date}T12:00:00Z`);
         const formattedDate = swedishDateFormat.format(displayDate);
         const dateLabel = isTomorrow ? `${formattedDate} (+1)` : formattedDate;
-        eyebrowElement.textContent = `Elpriser SE3 · ${dateLabel}`;
+        eyebrowElement.textContent = `Elpriser ${areaSelect.value} · ${dateLabel}`;
       }
 
       function renderClock() {
@@ -454,6 +607,11 @@
         timeElement.textContent = `${timeParts.hour}:${timeParts.minute}`;
 
         const periodIndex = hours * 4 + Math.floor(minutes / 15);
+        const elapsedPeriods = hours * 4 + minutes / 15 + seconds / 900;
+        const nowX = chartPlot.left + (elapsedPeriods / 96) * (chartPlot.right - chartPlot.left);
+        chartNowElement.setAttribute("x1", String(nowX));
+        chartNowElement.setAttribute("x2", String(nowX));
+
         const price = quarterHourPrices[periodIndex];
         currentPriceElement.classList.remove("cheap", "middle", "expensive");
         if (price !== undefined) {
@@ -471,6 +629,9 @@
         for (const label of labelsElement.querySelectorAll(".hour-label")) {
           label.classList.toggle("passed", Number(label.dataset.hour) < hours);
         }
+        for (const element of chartDataElement.querySelectorAll("[data-period]")) {
+          element.classList.toggle("passed", Number(element.dataset.period) < periodIndex);
+        }
       }
 
       let priceThresholds = { firstThird: 0, secondThird: 0 };
@@ -483,6 +644,94 @@
           return "middle";
         }
         return "expensive";
+      }
+
+      function renderPriceChart() {
+        chartGridElement.replaceChildren();
+        chartDataElement.replaceChildren();
+        chartLabelsElement.replaceChildren();
+
+        const validPrices = quarterHourPrices.filter((price) => price !== undefined);
+        if (validPrices.length === 0) {
+          chartNowElement.setAttribute("y1", String(chartPlot.top));
+          chartNowElement.setAttribute("y2", String(chartPlot.bottom));
+          return;
+        }
+
+        const minimum = Math.min(...validPrices);
+        const maximum = Math.max(...validPrices);
+        const padding = Math.max((maximum - minimum) * 0.12, 0.02);
+        const chartMinimum = minimum - padding;
+        const chartMaximum = maximum + padding;
+        const xForPeriod = (period) => chartPlot.left
+          + (period / 96) * (chartPlot.right - chartPlot.left);
+        const yForPrice = (price) => chartPlot.bottom
+          - ((price - chartMinimum) / (chartMaximum - chartMinimum))
+          * (chartPlot.bottom - chartPlot.top);
+
+        for (let row = 0; row < 3; row += 1) {
+          const ratio = row / 2;
+          const price = chartMaximum - ratio * (chartMaximum - chartMinimum);
+          const y = chartPlot.top + ratio * (chartPlot.bottom - chartPlot.top);
+          const gridLine = document.createElementNS("http://www.w3.org/2000/svg", "line");
+          gridLine.setAttribute("class", "chart-grid-line");
+          gridLine.setAttribute("x1", String(chartPlot.left));
+          gridLine.setAttribute("x2", String(chartPlot.right));
+          gridLine.setAttribute("y1", String(y));
+          gridLine.setAttribute("y2", String(y));
+          chartGridElement.append(gridLine);
+
+          const priceLabel = document.createElementNS("http://www.w3.org/2000/svg", "text");
+          priceLabel.setAttribute("class", "chart-axis-label");
+          priceLabel.setAttribute("x", String(chartPlot.left - 10));
+          priceLabel.setAttribute("y", String(y));
+          priceLabel.setAttribute("text-anchor", "end");
+          priceLabel.setAttribute("dominant-baseline", "middle");
+          priceLabel.textContent = price.toFixed(2);
+          chartLabelsElement.append(priceLabel);
+        }
+
+        for (let hour = 0; hour <= 24; hour += 6) {
+          const x = xForPeriod(hour * 4);
+          const label = document.createElementNS("http://www.w3.org/2000/svg", "text");
+          label.setAttribute("class", "chart-axis-label");
+          label.setAttribute("x", String(x));
+          label.setAttribute("y", "294");
+          label.setAttribute("text-anchor", hour === 0 ? "start" : hour === 24 ? "end" : "middle");
+          label.textContent = String(hour).padStart(2, "0");
+          chartLabelsElement.append(label);
+        }
+
+        for (let period = 0; period < 96; period += 1) {
+          const price = quarterHourPrices[period];
+          if (price === undefined) {
+            continue;
+          }
+
+          const category = priceCategory(price, priceThresholds);
+          const point = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+          point.setAttribute("class", `chart-point ${category}`);
+          point.setAttribute("cx", String(xForPeriod(period)));
+          point.setAttribute("cy", String(yForPrice(price)));
+          point.setAttribute("r", "3");
+          point.dataset.period = String(period);
+          chartDataElement.append(point);
+
+          const nextPeriod = period + 1;
+          const nextPrice = nextPeriod < 96 ? quarterHourPrices[nextPeriod] : price;
+          if (nextPrice !== undefined) {
+            const segment = document.createElementNS("http://www.w3.org/2000/svg", "line");
+            segment.setAttribute("class", `chart-segment ${category}`);
+            segment.setAttribute("x1", String(xForPeriod(period)));
+            segment.setAttribute("y1", String(yForPrice(price)));
+            segment.setAttribute("x2", String(xForPeriod(Math.min(nextPeriod, 96))));
+            segment.setAttribute("y2", String(yForPrice(nextPrice)));
+            segment.dataset.period = String(period);
+            chartDataElement.append(segment);
+          }
+        }
+
+        renderClock();
       }
 
       function renderPrices(prices) {
@@ -512,6 +761,8 @@
             firstThird: minimum + third,
             secondThird: minimum + third * 2
           };
+        } else {
+          priceThresholds = { firstThird: 0, secondThird: 0 };
         }
 
         labelsElement.replaceChildren();
@@ -555,11 +806,13 @@
           labelsElement.append(hourLabel);
         }
 
+        renderPriceChart();
         renderClock();
       }
 
       async function loadPrices() {
         refreshButton.disabled = true;
+        areaSelect.disabled = true;
         statusElement.dataset.state = "loading";
         statusElement.textContent = "Loading…";
         responseElement.textContent = "Loading data…";
@@ -570,7 +823,7 @@
           showTomorrow = hourInSweden >= 14;
           const date = stockholmDate(now, showTomorrow ? 1 : 0);
           displayedDate = date;
-          const apiUrl = apiUrlForDate(date);
+          const apiUrl = apiUrlForDate(date, areaSelect.value);
           setDisplayedDate(date, showTomorrow);
           console.info(`GET ${apiUrl}`);
 
@@ -600,6 +853,7 @@
           currentPriceElement.textContent = "Data unavailable";
         } finally {
           refreshButton.disabled = false;
+          areaSelect.disabled = false;
         }
       }
 
@@ -613,6 +867,14 @@
       }
 
       refreshButton.addEventListener("click", loadPrices);
+      areaSelect.addEventListener("change", () => {
+        try {
+          localStorage.setItem(areaStorageKey, areaSelect.value);
+        } catch (error) {
+          console.warn("Could not save the selected electricity price area:", error);
+        }
+        loadPrices();
+      });
       window.setInterval(() => {
         renderClock();
         checkForDateChange();
