@@ -100,7 +100,7 @@
         flex: 0 0 auto;
         border: 1px solid var(--border);
         border-radius: 10px;
-        padding: 10px 15px;
+        padding: 5px 10px;
         background: var(--surface);
         color: var(--text);
         font: inherit;
@@ -306,7 +306,7 @@
 
       @media (max-width: 560px) {
         body {
-          padding: 28px 12px;
+          padding: 24px 8px;
         }
 
         header {
@@ -314,12 +314,21 @@
           gap: 16px;
         }
 
+        .clock-wrap {
+          margin-inline: -4px;
+          padding: 0;
+        }
+
+        #clock {
+          width: 100%;
+        }
+
         .hour-label {
-          font-size: 18px;
+          font-size: 25px;
         }
 
         .price-label {
-          font-size: 10px;
+          font-size: 12px;
         }
       }
     </style>
