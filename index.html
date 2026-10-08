@@ -3,56 +3,28 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Elpriser · SE3</title>
+    <title>Elpriser · SE</title>
     <style>
       :root {
-        color-scheme: light dark;
+        color-scheme: dark;
         font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-        background: #f3f6fa;
-        color: #172438;
-        --page: #f3f6fa;
-        --surface: #fff;
-        --surface-muted: #f8fafc;
-        --border: #dce4ed;
-        --text: #172438;
-        --muted: #607187;
-        --accent: #087f70;
-        --accent-soft: #e2f5f1;
-        --hand: #087f70;
-        --dial: #a8b7c8;
-        --error: #b42318;
-        --price-cheap: #16803c;
-        --price-middle: #9a6900;
-        --price-expensive: #c62828;
-      }
-
-      @media (prefers-color-scheme: dark) {
-        :root {
-          background: #0b1220;
-          color: #e5edf8;
-          --page: #0b1220;
-          --surface: #101a2a;
-          --surface-muted: #142033;
-          --border: #26364c;
-          --text: #e5edf8;
-          --muted: #91a4bd;
-          --accent: #70d5c0;
-          --accent-soft: #17352f;
-          --hand: #70d5c0;
-          --dial: #52657d;
-          --error: #ff9d9d;
-          --price-cheap: #66d98a;
-          --price-middle: #ffd45c;
-          --price-expensive: #ff8585;
-        }
-
-        .price-label.passed {
-          fill: #78869a;
-        }
-
-        .hour-label.passed {
-          fill: #78869a;
-        }
+        background: #0b1220;
+        color: #e5edf8;
+        --page: #0b1220;
+        --clock-center-mask-opacity: 0.55;
+        --surface: #101a2a;
+        --surface-muted: #142033;
+        --border: #26364c;
+        --text: #e5edf8;
+        --muted: #91a4bd;
+        --accent: #70d5c0;
+        --accent-soft: #17352f;
+        --hand: #70d5c0;
+        --dial: #52657d;
+        --error: #ff9d9d;
+        --price-cheap: #66d98a;
+        --price-middle: #ffd45c;
+        --price-expensive: #ff8585;
       }
 
       * {
@@ -310,7 +282,7 @@
       }
 
       .hour-label.passed {
-        fill: #929baa;
+        fill: #78869a;
       }
 
       .price-label {
@@ -337,7 +309,7 @@
       }
 
       .price-label.passed {
-        fill: #929baa;
+        fill: #78869a;
       }
 
       .price-label.current {
@@ -350,6 +322,11 @@
         stroke: var(--hand);
         stroke-linecap: round;
         stroke-width: 4;
+      }
+
+      .clock-center-mask {
+        fill: var(--page);
+        opacity: var(--clock-center-mask-opacity);
       }
 
       .clock-center {
@@ -477,8 +454,9 @@
             <g id="ticks"></g>
             <g id="labels"></g>
             <line id="hand" x1="400" y1="400" x2="400" y2="190"></line>
+            <circle class="clock-center-mask" cx="400" cy="400" r="86"></circle>
             <text id="clock-time" class="clock-center" x="400" y="386">--:--</text>
-            <text class="center-caption" x="400" y="414">SWEDEN TIME</text>
+            <text class="center-caption" x="400" y="414">CET</text>
             <text id="current-price" class="current-price" x="400" y="446">-- SEK/kWh</text>
           </svg>
         </div>
@@ -600,7 +578,7 @@
         const minutes = Number(timeParts.minute);
         const seconds = Number(timeParts.second);
         const angle = ((hours + minutes / 60 + seconds / 3600) / 24) * Math.PI * 2 - Math.PI / 2;
-        const handRadius = 210;
+        const handRadius = 260;
 
         handElement.setAttribute("x2", String(400 + Math.cos(angle) * handRadius));
         handElement.setAttribute("y2", String(400 + Math.sin(angle) * handRadius));
