@@ -462,7 +462,7 @@
         <div class="clock-wrap">
           <svg id="clock" viewBox="0 0 800 800" role="img" aria-labelledby="clock-title clock-description">
             <title id="clock-title">24-hour electricity price clock for SE3</title>
-            <desc id="clock-description">Prices are shown for every 15-minute period. The single hand shows Sweden time. Midnight is at the top of the clock. After 14:00, today's remaining prices are shown alongside tomorrow's prices for elapsed hours.</desc>
+            <desc id="clock-description">Prices are shown for every 15-minute period. The single hand shows Sweden time. Midnight is at the top of the clock. After 14:00, the previous six hours retain today's prices in gray; earlier elapsed hours show tomorrow's prices and are marked +.</desc>
             <circle class="dial-ring" cx="400" cy="400" r="350"></circle>
             <g id="ticks"></g>
             <g id="labels"></g>
@@ -631,7 +631,9 @@
         const price = quarterHourPrices[periodIndex];
         currentPriceElement.classList.remove("cheap", "middle", "expensive");
         if (price !== undefined) {
-          currentPriceElement.classList.add(priceCategory(price, priceThresholds));
+          currentPriceElement.classList.add(
+            priceCategory(price, thresholdsForTimestamp(now.getTime()))
+          );
         }
         currentPriceElement.textContent = price === undefined
           ? "-- SEK/kWh"
@@ -667,7 +669,7 @@
         }
       }
 
-      let priceThresholds = { firstThird: 0, secondThird: 0 };
+      let priceThresholdsByDate = new Map();
 
       function priceCategory(price, thresholds) {
         if (price <= thresholds.firstThird) {
@@ -677,6 +679,26 @@
           return "middle";
         }
         return "expensive";
+      }
+
+      function priceThresholds(prices) {
+        const validPrices = prices.filter((price) => price !== undefined);
+        if (validPrices.length === 0) {
+          return { firstThird: 0, secondThird: 0 };
+        }
+
+        const minimum = Math.min(...validPrices);
+        const maximum = Math.max(...validPrices);
+        const third = (maximum - minimum) / 3;
+        return {
+          firstThird: minimum + third,
+          secondThird: minimum + third * 2
+        };
+      }
+
+      function thresholdsForTimestamp(timestamp) {
+        return priceThresholdsByDate.get(stockholmDate(new Date(timestamp)))
+          ?? { firstThird: 0, secondThird: 0 };
       }
 
       function renderPriceChart() {
@@ -753,7 +775,7 @@
             continue;
           }
 
-          const category = priceCategory(price, priceThresholds);
+          const category = priceCategory(price, thresholdsForTimestamp(timestamp));
           const point = document.createElementNS("http://www.w3.org/2000/svg", "circle");
           point.setAttribute("class", `chart-point ${category}`);
           point.setAttribute("cx", String(xForPeriod(period)));
@@ -812,32 +834,21 @@
       }
 
       function renderPrices() {
-        const validPrices = [...quarterHourPrices, ...tomorrowQuarterHourPrices]
-          .filter((price) => price !== undefined);
         const nowParts = Object.fromEntries(
           swedishClockFormat.formatToParts(new Date())
             .map(({ type, value }) => [type, value])
         );
-        const nowPeriod = Number(nowParts.hour) * 4
-          + Math.floor(Number(nowParts.minute) / 15);
+        const nowHour = Number(nowParts.hour);
+        const nowMinute = Number(nowParts.minute);
+        const nowSecond = Number(nowParts.second);
+        const nowPeriod = nowHour * 4 + Math.floor(nowMinute / 15);
+        const elapsedPeriods = nowHour * 4 + nowMinute / 15 + nowSecond / 900;
         displayedPeriod = nowPeriod;
         displayQuarterHourPrices = quarterHourPrices.map((price, period) => (
-          showTomorrowPrices && period < nowPeriod
+          showTomorrowPrices && period < nowPeriod && elapsedPeriods - period > 24
             ? tomorrowQuarterHourPrices[period]
             : price
         ));
-        if (validPrices.length > 0) {
-          const minimum = Math.min(...validPrices);
-          const maximum = Math.max(...validPrices);
-          const third = (maximum - minimum) / 3;
-          priceThresholds = {
-            firstThird: minimum + third,
-            secondThird: minimum + third * 2
-          };
-        } else {
-          priceThresholds = { firstThird: 0, secondThird: 0 };
-        }
-
         labelsElement.replaceChildren();
         ticksElement.replaceChildren();
 
@@ -861,7 +872,16 @@
           priceLabel.dataset.period = String(period);
           const price = displayQuarterHourPrices[period];
           if (price !== undefined) {
-            priceLabel.classList.add(priceCategory(price, priceThresholds));
+            const isTomorrowPrice = showTomorrowPrices
+              && period < nowPeriod
+              && elapsedPeriods - period > 24;
+            const priceDate = isTomorrowPrice
+              ? stockholmDate(new Date(), 1)
+              : displayedDate;
+            priceLabel.classList.add(
+              priceCategory(price, priceThresholdsByDate.get(priceDate)
+                ?? { firstThird: 0, secondThird: 0 })
+            );
           }
           priceLabel.textContent = price === undefined ? "—" : price.toFixed(2);
           labelsElement.append(priceLabel);
@@ -875,8 +895,8 @@
           hourLabel.setAttribute("y", String(400 + Math.sin(angle) * 282));
           hourLabel.dataset.hour = String(hour);
           const dateSuffix = showTomorrowPrices
-            && hour < Number(nowParts.hour)
-            && (Number(nowParts.hour) + Number(nowParts.minute) / 60 - hour) > 6
+            && hour < nowHour
+            && (nowHour + nowMinute / 60 + nowSecond / 3600 - hour) > 6
             ? " +"
             : "";
           hourLabel.textContent = `${String(hour).padStart(2, "0")}${dateSuffix}`;
@@ -920,6 +940,15 @@
           quarterHourPrices = parsedTodayPrices.periodPrices;
           const parsedTomorrowPrices = parsePrices(tomorrowPrices);
           tomorrowQuarterHourPrices = parsedTomorrowPrices.periodPrices;
+          priceThresholdsByDate = new Map([
+            ...(shouldLoadHistoryPrices
+              ? [[yesterdayDate, priceThresholds(parsedHistoryPrices.periodPrices)]]
+              : []),
+            [date, priceThresholds(parsedTodayPrices.periodPrices)],
+            ...(shouldShowTomorrowPrices
+              ? [[tomorrowDate, priceThresholds(parsedTomorrowPrices.periodPrices)]]
+              : [])
+          ]);
           timedPrices = new Map([
             ...parsedHistoryPrices.byTimestamp,
             ...parsedTodayPrices.byTimestamp,
@@ -949,6 +978,7 @@
           statusElement.textContent = "Could not load data";
           quarterHourPrices = [];
           tomorrowQuarterHourPrices = [];
+          priceThresholdsByDate = new Map();
           timedPrices = new Map();
           renderPrices();
           currentPriceElement.textContent = "Data unavailable";
