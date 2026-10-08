@@ -877,9 +877,16 @@
       }, 1000);
       loadPrices();
 
-      if ("serviceWorker" in navigator && window.isSecureContext) {
+      const canRegisterServiceWorker = window.isSecureContext
+        && (location.protocol === "https:"
+          || location.hostname === "localhost"
+          || location.hostname === "127.0.0.1");
+
+      if ("serviceWorker" in navigator && canRegisterServiceWorker) {
         navigator.serviceWorker.register("./service-worker.js")
           .catch((error) => console.error("Could not register the app service worker:", error));
+      } else if (location.protocol === "file:") {
+        console.info("App installation needs HTTPS or localhost. This page is currently opened as a local file.");
       }
     </script>
   </body>
