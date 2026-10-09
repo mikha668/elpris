@@ -505,10 +505,10 @@
       </section>
 
       <section class="price-chart-section" aria-label="Electricity prices over the day">
-        <h2 class="price-chart-title">Elpris senaste och kommande 12 timmar (SEK/kWh)</h2>
+        <h2 class="price-chart-title">Elpris senaste 6 och kommande 18 timmar (SEK/kWh)</h2>
         <svg id="price-chart" viewBox="0 0 800 320" role="img" aria-labelledby="price-chart-title price-chart-description">
           <title id="price-chart-title">Electricity price graph for the day</title>
-          <desc id="price-chart-description">Each point represents a 15-minute electricity price in a rolling 24-hour window, with 12 hours before and after now. Hours on the following date are marked +.</desc>
+          <desc id="price-chart-description">Each point represents a 15-minute electricity price in a rolling 24-hour window, with 6 hours before and 18 hours after now. Hours on the following date are marked +.</desc>
           <g id="chart-grid"></g>
           <g id="chart-data"></g>
           <line id="chart-now" x1="68" y1="28" x2="68" y2="330"></line>
@@ -653,7 +653,7 @@
         const currentHour = hours;
         const quarterProgress = (now.getTime() % 900000) / 900000;
         const nowX = chartPlot.left
-          + ((48 + quarterProgress) / 96) * (chartPlot.right - chartPlot.left);
+          + ((24 + quarterProgress) / 96) * (chartPlot.right - chartPlot.left);
         chartNowElement.setAttribute("x1", String(nowX));
         chartNowElement.setAttribute("x2", String(nowX));
 
@@ -691,7 +691,7 @@
               : hour < currentHour
           );
         }
-        const chartPeriod = 48 + (now.getTime() % 900000) / 900000;
+        const chartPeriod = 24 + (now.getTime() % 900000) / 900000;
         for (const element of chartDataElement.querySelectorAll("[data-period]")) {
           const period = Number(element.dataset.period);
           element.classList.toggle("passed", period < chartPeriod);
@@ -777,7 +777,7 @@
 
         const now = new Date();
         const nowTimestamp = now.getTime();
-        const startTimestamp = Math.floor(nowTimestamp / 900000) * 900000 - 12 * 60 * 60 * 1000;
+        const startTimestamp = Math.floor(nowTimestamp / 900000) * 900000 - 6 * 60 * 60 * 1000;
         const currentDate = stockholmDate(now);
 
         for (const period of [0, 24, 48, 72, 96]) {
@@ -831,7 +831,7 @@
         }
 
         const nowX = chartPlot.left
-          + ((48 + (nowTimestamp % 900000) / 900000) / 96)
+          + ((24 + (nowTimestamp % 900000) / 900000) / 96)
           * (chartPlot.right - chartPlot.left);
         chartNowElement.setAttribute("x1", String(nowX));
         chartNowElement.setAttribute("x2", String(nowX));
